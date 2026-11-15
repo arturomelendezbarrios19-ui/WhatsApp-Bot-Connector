@@ -35,15 +35,22 @@ const settingsFile = path.resolve(
     path.join(process.cwd(), ".whatsapp-bot-settings.json"),
 );
 const logger = pino({ level: "silent" });
-const spamCount = 5;
-const spamIntervalMs = 40;
+function getSpamCount(): number {
+  const value = process.env["CANT_SPAM"]?.trim();
+  if (!value || !/^\d+$/.test(value)) return 5;
+  return Math.max(1, Math.min(20, Number(value)));
+}
+
+const spamCount = getSpamCount();
+const spamIntervalMs = 30;
 const spamCooldownMs = 60_000;
 const spamMessages = [
-  "🧪 Mensaje de prueba {n}/{total} — hola",
-  "🧪 Mensaje de prueba {n}/{total} — funcionando",
-  "🧪 Mensaje de prueba {n}/{total} — todo bien",
-  "🧪 Mensaje de prueba {n}/{total} — casi terminamos",
-  "🧪 Mensaje de prueba {n}/{total} — listo ✅",
+  "XD 🥵",
+  "XD 👹",
+  "XD 👺",
+  "XD 🤖",
+  "XD ☠️",
+  "XD 💀",
 ];
 
 function readSavedBotSetting(): boolean {
@@ -147,12 +154,10 @@ async function runSpamTest(
 
   try {
     const jobs = Array.from({ length: spamCount }, async (_, index) => {
-      // Match the ZIP: each message begins 40 ms after the previous start,
+      // Each message begins 30 ms after the previous start,
       // without waiting for WhatsApp to acknowledge the earlier send.
       if (index > 0) await sleep(index * spamIntervalMs);
-      const text = spamMessages[index % spamMessages.length]!
-        .replaceAll("{n}", String(index + 1))
-        .replaceAll("{total}", String(spamCount));
+      const text = spamMessages[index % spamMessages.length]!;
       await sock.sendMessage(jid, { text });
     });
 
@@ -198,7 +203,7 @@ function handleIncomingMessages(sock: ReturnType<typeof makeWASocket>): void {
         await sock.sendMessage(jid, {
           text:
             "Comandos disponibles: !ping, !ayuda y !spam. " +
-            "!spam envía 5 mensajes de prueba al chat actual, con 40 ms entre inicios y 60 s de espera.",
+            "!spam envía mensajes XD con emojis al chat actual. CANT_SPAM define la cantidad (1–20), con 30 ms entre inicios y 60 s de espera.",
         });
       }
     }
@@ -343,7 +348,7 @@ export async function setWhatsappBotEnabled(enabled: boolean): Promise<WhatsappS
   });
   botEnabled = enabled;
   statusMessage = enabled
-    ? "Bot activado. Usa !spam, !ping o !ayuda desde un chat o grupo."
+    ? "Bot activado. Usa !spam, !ping o !ayuda desde un chat o grupo. !spam usa CANT_SPAM (1–20), 30 ms entre inicios y 60 s de espera."
     : connectionState === "connected"
       ? "Bot en pausa. WhatsApp permanece conectado."
       : "Bot en pausa.";

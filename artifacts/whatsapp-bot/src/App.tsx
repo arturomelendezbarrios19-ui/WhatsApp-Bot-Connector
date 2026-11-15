@@ -157,7 +157,7 @@ function Home() {
               <div className="bot-copy">
                 <div className="bot-state-line"><span className={`bot-dot ${status?.botEnabled ? 'bot-active' : ''}`} /><span data-testid="status-bot">{status?.botEnabled ? 'Bot activo' : 'Bot pausado'}</span></div>
                 <p>{status?.botEnabled ? 'Tu bot ya puede responder a tus comandos.' : 'Actívalo cuando quieras empezar a usar tus comandos.'}</p>
-                <p className="bot-command-note" data-testid="text-command-help">Escribe <code>!spam</code> en un chat o grupo para enviar 5 mensajes de prueba, con 40 ms entre inicios y 60 s de espera.</p>
+                <p className="bot-command-note" data-testid="text-command-help">Escribe <code>!spam</code> en el chat o grupo elegido. Envía XD con emojis alternados; <code>CANT_SPAM</code> define entre 1 y 20 mensajes, con 30 ms entre inicios y pausa de 60 s.</p>
               </div>
               <button className={`bot-toggle ${status?.botEnabled ? 'toggle-on' : ''}`} onClick={handleBotToggle} disabled={toggle.isPending} role="switch" aria-checked={Boolean(status?.botEnabled)} aria-label={status?.botEnabled ? 'Pausar bot' : 'Activar bot'} data-testid="button-toggle-bot">
                 <span className="toggle-knob">{toggle.isPending ? <LoaderCircle size={13} className="button-spinner" /> : <Power size={13} />}</span>
