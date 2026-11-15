@@ -69,7 +69,7 @@ function Home() {
         <div className="intro">
           <div className="eyebrow"><span className="eyebrow-line" /> TU ASISTENTE, EN TU CHAT</div>
           <h1 id="page-title">Una conexión.<br /><em>Y ya está.</em></h1>
-          <p className="intro-copy">Vincula tu WhatsApp personal para poner en marcha tu bot de comandos. Sin grupos, sin complicaciones.</p>
+          <p className="intro-copy">Vincula tu WhatsApp personal y usa comandos para activar respuestas y mensajes de prueba en el chat que elijas.</p>
           <div className="privacy-note">
             <span className="privacy-icon"><ShieldCheck size={17} /></span>
             <span>Tu cuenta sigue siendo tuya.<br /><b>El bot solo responde cuando lo activas.</b></span>
@@ -157,6 +157,7 @@ function Home() {
               <div className="bot-copy">
                 <div className="bot-state-line"><span className={`bot-dot ${status?.botEnabled ? 'bot-active' : ''}`} /><span data-testid="status-bot">{status?.botEnabled ? 'Bot activo' : 'Bot pausado'}</span></div>
                 <p>{status?.botEnabled ? 'Tu bot ya puede responder a tus comandos.' : 'Actívalo cuando quieras empezar a usar tus comandos.'}</p>
+                <p className="bot-command-note" data-testid="text-command-help">Escribe <code>!spam</code> en un chat o grupo para enviar 5 mensajes de prueba, con 40 ms entre inicios y 60 s de espera.</p>
               </div>
               <button className={`bot-toggle ${status?.botEnabled ? 'toggle-on' : ''}`} onClick={handleBotToggle} disabled={toggle.isPending} role="switch" aria-checked={Boolean(status?.botEnabled)} aria-label={status?.botEnabled ? 'Pausar bot' : 'Activar bot'} data-testid="button-toggle-bot">
                 <span className="toggle-knob">{toggle.isPending ? <LoaderCircle size={13} className="button-spinner" /> : <Power size={13} />}</span>

@@ -35,6 +35,16 @@ const settingsFile = path.resolve(
     path.join(process.cwd(), ".whatsapp-bot-settings.json"),
 );
 const logger = pino({ level: "silent" });
+const spamCount = 5;
+const spamIntervalMs = 40;
+const spamCooldownMs = 60_000;
+const spamMessages = [
+  "🧪 Mensaje de prueba {n}/{total} — hola",
+  "🧪 Mensaje de prueba {n}/{total} — funcionando",
+  "🧪 Mensaje de prueba {n}/{total} — todo bien",
+  "🧪 Mensaje de prueba {n}/{total} — casi terminamos",
+  "🧪 Mensaje de prueba {n}/{total} — listo ✅",
+];
 
 function readSavedBotSetting(): boolean {
   if (!existsSync(settingsFile)) return false;
@@ -54,6 +64,8 @@ let currentSocket: ReturnType<typeof makeWASocket> | null = null;
 let startInProgress: Promise<void> | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectAttempts = 0;
+let spamRunning = false;
+let spamCooldownUntil = 0;
 let connectionState: WhatsappConnectionState = "idle";
 let phoneNumber: string | null = null;
 let qrDataUrl: string | null = null;
@@ -87,17 +99,73 @@ function extractMessageText(message: unknown): string {
           | undefined)
       : record;
   const textMessage = content?.["extendedTextMessage"];
+  const imageMessage = content?.["imageMessage"];
+  const videoMessage = content?.["videoMessage"];
   const conversation = content?.["conversation"];
   const extendedText =
     textMessage && typeof textMessage === "object"
       ? (textMessage as Record<string, unknown>)["text"]
       : undefined;
+  const imageCaption =
+    imageMessage && typeof imageMessage === "object"
+      ? (imageMessage as Record<string, unknown>)["caption"]
+      : undefined;
+  const videoCaption =
+    videoMessage && typeof videoMessage === "object"
+      ? (videoMessage as Record<string, unknown>)["caption"]
+      : undefined;
 
-  return typeof conversation === "string"
-    ? conversation
-    : typeof extendedText === "string"
-      ? extendedText
-      : "";
+  return [conversation, extendedText, imageCaption, videoCaption].find(
+    (value): value is string => typeof value === "string",
+  ) ?? "";
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runSpamTest(
+  sock: ReturnType<typeof makeWASocket>,
+  jid: string,
+): Promise<void> {
+  if (spamRunning) {
+    await sock.sendMessage(jid, {
+      text: "Ya hay un envío en curso. Espera a que termine.",
+    });
+    return;
+  }
+
+  const now = Date.now();
+  if (now < spamCooldownUntil) {
+    const secondsLeft = Math.ceil((spamCooldownUntil - now) / 1000);
+    await sock.sendMessage(jid, {
+      text: `Espera ${secondsLeft} s antes de volver a usar !spam.`,
+    });
+    return;
+  }
+
+  spamRunning = true;
+  spamCooldownUntil = now + spamCooldownMs;
+
+  try {
+    const jobs = Array.from({ length: spamCount }, async (_, index) => {
+      // Match the ZIP: each message begins 40 ms after the previous start,
+      // without waiting for WhatsApp to acknowledge the earlier send.
+      if (index > 0) await sleep(index * spamIntervalMs);
+      const text = spamMessages[index % spamMessages.length]!
+        .replaceAll("{n}", String(index + 1))
+        .replaceAll("{total}", String(spamCount));
+      await sock.sendMessage(jid, { text });
+    });
+
+    const results = await Promise.allSettled(jobs);
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed > 0) {
+      await sock.sendMessage(jid, {
+        text: `No se pudieron enviar ${failed} de ${spamCount} mensajes de prueba.`,
+      });
+    }
+  } finally {
+    spamRunning = false;
+  }
 }
 
 function handleIncomingMessages(sock: ReturnType<typeof makeWASocket>): void {
@@ -110,20 +178,27 @@ function handleIncomingMessages(sock: ReturnType<typeof makeWASocket>): void {
         !message.key.fromMe ||
         !jid ||
         jid === "status@broadcast" ||
-        jid.endsWith("@g.us") ||
         jid.endsWith("@newsletter")
       ) {
         continue;
       }
 
+      const timestamp = Number(message.messageTimestamp);
+      if (timestamp && Date.now() / 1000 - timestamp > 60) continue;
+
       const command = extractMessageText(message.message)
         .trim()
         .toLowerCase();
-      if (command === "!ping") {
+      const commandName = command.split(/\s+/)[0];
+      if (commandName === "!spam") {
+        await runSpamTest(sock, jid);
+      } else if (commandName === "!ping") {
         await sock.sendMessage(jid, { text: "Bot activo." });
-      } else if (command === "!ayuda") {
+      } else if (commandName === "!ayuda") {
         await sock.sendMessage(jid, {
-          text: "Comandos disponibles: !ping y !ayuda.",
+          text:
+            "Comandos disponibles: !ping, !ayuda y !spam. " +
+            "!spam envía 5 mensajes de prueba al chat actual, con 40 ms entre inicios y 60 s de espera.",
         });
       }
     }
@@ -268,7 +343,7 @@ export async function setWhatsappBotEnabled(enabled: boolean): Promise<WhatsappS
   });
   botEnabled = enabled;
   statusMessage = enabled
-    ? "Bot activado. Usa !ping o !ayuda desde un chat individual."
+    ? "Bot activado. Usa !spam, !ping o !ayuda desde un chat o grupo."
     : connectionState === "connected"
       ? "Bot en pausa. WhatsApp permanece conectado."
       : "Bot en pausa.";
