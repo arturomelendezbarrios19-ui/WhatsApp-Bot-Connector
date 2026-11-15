@@ -1,0 +1,1 @@
+- [Baileys on the API server](baileys-runtime.md) — older Baileys versions were blocked; verify the allowed release and externalized runtime dependencies before restarting.

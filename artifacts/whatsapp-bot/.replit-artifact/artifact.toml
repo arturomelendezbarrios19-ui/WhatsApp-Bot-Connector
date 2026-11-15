@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "WhatsApp Bot"
+description = "Connect a WhatsApp account and control its bot from a simple web dashboard."
+version = "1.0.0"
+id = "artifacts/whatsapp-bot"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20337
+
+[services.development]
+run = "pnpm --filter @workspace/whatsapp-bot run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/whatsapp-bot", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/whatsapp-bot/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20337"
+BASE_PATH = "/"

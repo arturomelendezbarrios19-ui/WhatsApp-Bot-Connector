@@ -1,0 +1,9 @@
+# The format of this file is identical to `.dockerignore`.
+# It is used to reduce the size of deployed images to make the process of publishing faster.
+
+# No need to store the pnpm store twice.
+.local
+
+# WhatsApp linked-device credentials and local bot settings.
+artifacts/api-server/.whatsapp-auth
+artifacts/api-server/.whatsapp-bot-settings.json

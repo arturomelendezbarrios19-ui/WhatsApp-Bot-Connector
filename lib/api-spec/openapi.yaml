@@ -1,0 +1,123 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: whatsapp
+    description: WhatsApp connection and bot controls
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /whatsapp/status:
+    get:
+      operationId: getWhatsappStatus
+      tags: [whatsapp]
+      summary: Get WhatsApp connection and bot status
+      responses:
+        "200":
+          description: Current WhatsApp status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappStatus"
+  /whatsapp/connect:
+    post:
+      operationId: connectWhatsapp
+      tags: [whatsapp]
+      summary: Start or resume a WhatsApp connection
+      responses:
+        "200":
+          description: Current WhatsApp connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappStatus"
+  /whatsapp/bot:
+    patch:
+      operationId: toggleWhatsappBot
+      tags: [whatsapp]
+      summary: Enable or pause the WhatsApp bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsappBotToggle"
+      responses:
+        "200":
+          description: Updated WhatsApp status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappStatus"
+        "409":
+          description: WhatsApp is not connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    WhatsappStatus:
+      type: object
+      properties:
+        connectionState:
+          type: string
+          enum: [idle, connecting, waiting_qr, connected, reconnecting, error]
+        connected:
+          type: boolean
+        botEnabled:
+          type: boolean
+        phoneNumber:
+          type: [string, "null"]
+        qrDataUrl:
+          type: [string, "null"]
+        statusMessage:
+          type: string
+      required:
+        - connectionState
+        - connected
+        - botEnabled
+        - phoneNumber
+        - qrDataUrl
+        - statusMessage
+    WhatsappBotToggle:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required:
+        - enabled
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
