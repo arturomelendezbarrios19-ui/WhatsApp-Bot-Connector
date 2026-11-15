@@ -7,3 +7,6 @@
 # WhatsApp linked-device credentials and local bot settings.
 artifacts/api-server/.whatsapp-auth
 artifacts/api-server/.whatsapp-bot-settings.json
+
+# Generated deliverables.
+generated-artifacts

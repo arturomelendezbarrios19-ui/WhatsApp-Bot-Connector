@@ -157,7 +157,18 @@ function Home() {
               <div className="bot-copy">
                 <div className="bot-state-line"><span className={`bot-dot ${status?.botEnabled ? 'bot-active' : ''}`} /><span data-testid="status-bot">{status?.botEnabled ? 'Bot activo' : 'Bot pausado'}</span></div>
                 <p>{status?.botEnabled ? 'Tu bot ya puede responder a tus comandos.' : 'Actívalo cuando quieras empezar a usar tus comandos.'}</p>
-                <p className="bot-command-note" data-testid="text-command-help">Escribe <code>!spam</code> en el chat o grupo elegido. Envía XD con emojis alternados; <code>CANT_SPAM</code> define entre 1 y 20 mensajes, con 30 ms entre inicios y pausa de 60 s.</p>
+                <div className="command-guide" data-testid="text-command-help">
+                  <div className="command-guide-title">Guía rápida</div>
+                  <div className="command-guide-row">
+                    <code>!msj texto</code>
+                    <span>Configura el mensaje en tu chat contigo mismo.</span>
+                  </div>
+                  <div className="command-guide-row">
+                    <code>!spam</code>
+                    <span>Inicia la secuencia en el chat o grupo elegido.</span>
+                  </div>
+                  <p className="command-guide-limit"><code>CANT_SPAM</code> limita de 1 a 20 mensajes. 30 ms entre inicios · cooldown de 60 s.</p>
+                </div>
               </div>
               <button className={`bot-toggle ${status?.botEnabled ? 'toggle-on' : ''}`} onClick={handleBotToggle} disabled={toggle.isPending} role="switch" aria-checked={Boolean(status?.botEnabled)} aria-label={status?.botEnabled ? 'Pausar bot' : 'Activar bot'} data-testid="button-toggle-bot">
                 <span className="toggle-knob">{toggle.isPending ? <LoaderCircle size={13} className="button-spinner" /> : <Power size={13} />}</span>

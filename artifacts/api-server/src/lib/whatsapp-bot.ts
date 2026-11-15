@@ -44,29 +44,46 @@ function getSpamCount(): number {
 const spamCount = getSpamCount();
 const spamIntervalMs = 30;
 const spamCooldownMs = 60_000;
-const spamMessages = [
-  "XD 🥵",
-  "XD 👹",
-  "XD 👺",
-  "XD 🤖",
-  "XD ☠️",
-  "XD 💀",
-];
+const maxSpamTextLength = 250;
+const spamEmojis = ["🥵", "👹", "👺", "🤖", "☠️", "💀"];
 
-function readSavedBotSetting(): boolean {
-  if (!existsSync(settingsFile)) return false;
+interface SavedBotSettings {
+  botEnabled: boolean;
+  spamText: string;
+}
+
+function readSavedBotSettings(): SavedBotSettings {
+  if (!existsSync(settingsFile)) return { botEnabled: false, spamText: "XD" };
 
   try {
     const saved = JSON.parse(readFileSync(settingsFile, "utf8")) as {
       botEnabled?: unknown;
+      spamText?: unknown;
     };
-    return saved.botEnabled === true;
+    return {
+      botEnabled: saved.botEnabled === true,
+      spamText:
+        typeof saved.spamText === "string" && saved.spamText.trim()
+          ? saved.spamText.trim().slice(0, maxSpamTextLength)
+          : "XD",
+    };
   } catch {
-    return false;
+    return { botEnabled: false, spamText: "XD" };
   }
 }
 
-let botEnabled = readSavedBotSetting();
+const savedSettings = readSavedBotSettings();
+let botEnabled = savedSettings.botEnabled;
+let spamText = savedSettings.spamText;
+
+async function saveBotSettings(): Promise<void> {
+  await mkdir(path.dirname(settingsFile), { recursive: true });
+  await writeFile(settingsFile, JSON.stringify({ botEnabled, spamText }), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+}
+
 let currentSocket: ReturnType<typeof makeWASocket> | null = null;
 let startInProgress: Promise<void> | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
@@ -93,6 +110,19 @@ function numberFromJid(jid?: string | null): string | null {
   if (!jid) return null;
   const number = jid.split("@")[0]?.split(":")[0]?.replace(/\D/g, "");
   return number || null;
+}
+
+function isOwnPrivateChat(
+  sock: ReturnType<typeof makeWASocket>,
+  jid: string,
+): boolean {
+  const ownJid = sock.user?.id;
+  const ownNumber = numberFromJid(ownJid);
+  return (
+    jid.endsWith("@s.whatsapp.net") &&
+    Boolean(ownNumber) &&
+    numberFromJid(jid) === ownNumber
+  );
 }
 
 function extractMessageText(message: unknown): string {
@@ -151,13 +181,15 @@ async function runSpamTest(
 
   spamRunning = true;
   spamCooldownUntil = now + spamCooldownMs;
+  const messageForBatch = spamText;
 
   try {
     const jobs = Array.from({ length: spamCount }, async (_, index) => {
       // Each message begins 30 ms after the previous start,
       // without waiting for WhatsApp to acknowledge the earlier send.
       if (index > 0) await sleep(index * spamIntervalMs);
-      const text = spamMessages[index % spamMessages.length]!;
+      const emoji = spamEmojis[index % spamEmojis.length]!;
+      const text = `${messageForBatch} ${emoji}`;
       await sock.sendMessage(jid, { text });
     });
 
@@ -165,7 +197,7 @@ async function runSpamTest(
     const failed = results.filter((result) => result.status === "rejected").length;
     if (failed > 0) {
       await sock.sendMessage(jid, {
-        text: `No se pudieron enviar ${failed} de ${spamCount} mensajes de prueba.`,
+        text: `No se pudieron enviar ${failed} mensajes. Revisa la conexión de WhatsApp.`,
       });
     }
   } finally {
@@ -191,10 +223,8 @@ function handleIncomingMessages(sock: ReturnType<typeof makeWASocket>): void {
       const timestamp = Number(message.messageTimestamp);
       if (timestamp && Date.now() / 1000 - timestamp > 60) continue;
 
-      const command = extractMessageText(message.message)
-        .trim()
-        .toLowerCase();
-      const commandName = command.split(/\s+/)[0];
+      const messageText = extractMessageText(message.message).trim();
+      const commandName = messageText.split(/\s+/)[0]?.toLowerCase();
       if (commandName === "!spam") {
         await runSpamTest(sock, jid);
       } else if (commandName === "!ping") {
@@ -202,8 +232,39 @@ function handleIncomingMessages(sock: ReturnType<typeof makeWASocket>): void {
       } else if (commandName === "!ayuda") {
         await sock.sendMessage(jid, {
           text:
-            "Comandos disponibles: !ping, !ayuda y !spam. " +
-            "!spam envía mensajes XD con emojis al chat actual. CANT_SPAM define la cantidad (1–20), con 30 ms entre inicios y 60 s de espera.",
+            "Comandos: !ping, !ayuda, !msj texto y !spam. " +
+            "Configura !msj texto en tu chat contigo mismo; después usa !spam en el chat elegido. " +
+            "Envía la cantidad configurada (1–20) con tu texto y emojis, 30 ms entre inicios y cooldown de 60 s.",
+        });
+      } else if (commandName === "!msj" && isOwnPrivateChat(sock, jid)) {
+        const nextSpamText = messageText.slice("!msj".length).trim().replace(/\s+/g, " ");
+        if (!nextSpamText) {
+          await sock.sendMessage(jid, {
+            text: `Uso: !msj texto\nTexto actual: ${spamText}`,
+          });
+          continue;
+        }
+        if (nextSpamText.length > maxSpamTextLength) {
+          await sock.sendMessage(jid, {
+            text: `El texto puede tener hasta ${maxSpamTextLength} caracteres.`,
+          });
+          continue;
+        }
+
+        const previousSpamText = spamText;
+        spamText = nextSpamText;
+        try {
+          await saveBotSettings();
+        } catch (error) {
+          spamText = previousSpamText;
+          logger.error({ err: error }, "Could not save the WhatsApp spam message");
+          await sock.sendMessage(jid, {
+            text: "No pude guardar el texto. Inténtalo de nuevo.",
+          });
+          continue;
+        }
+        await sock.sendMessage(jid, {
+          text: `Texto de !spam actualizado: ${spamText}`,
         });
       }
     }
@@ -341,14 +402,16 @@ export async function setWhatsappBotEnabled(enabled: boolean): Promise<WhatsappS
     throw new Error("Conecta WhatsApp antes de activar el bot.");
   }
 
-  await mkdir(path.dirname(settingsFile), { recursive: true });
-  await writeFile(settingsFile, JSON.stringify({ botEnabled: enabled }), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  const previousBotEnabled = botEnabled;
   botEnabled = enabled;
+  try {
+    await saveBotSettings();
+  } catch (error) {
+    botEnabled = previousBotEnabled;
+    throw error;
+  }
   statusMessage = enabled
-    ? "Bot activado. Usa !spam, !ping o !ayuda desde un chat o grupo. !spam usa CANT_SPAM (1–20), 30 ms entre inicios y 60 s de espera."
+    ? "Bot activado. Configura !msj texto en tu chat contigo mismo y usa !spam en el chat elegido. CANT_SPAM limita la cantidad a 1–20."
     : connectionState === "connected"
       ? "Bot en pausa. WhatsApp permanece conectado."
       : "Bot en pausa.";
